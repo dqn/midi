@@ -176,45 +176,72 @@ export function parseMusicInfo(musicInfo: MusicInfo): MIDIInfo {
   const division = 960;
   const measure = 4 / 4;
 
-  const absoluteTimeTrackEventInfos: (MIDIEventInfo & {
-    time: number;
-  })[] = musicInfo.channels.flatMap((channelNumber, channelIndex) => {
-    return musicInfo.score.flatMap((bar, barIndex) => {
-      const barNotes = bar.notes[channelIndex].split(/\s+/);
-      assertIsNoteCommandArray(barNotes);
+  type AbsooluteTrackTimeEventInfo = MIDIEventInfo & { time: number };
+  const absoluteTimeTrackEventInfos: AbsooluteTrackTimeEventInfo[] = musicInfo.channels.flatMap(
+    (channelNumber, channelIndex) => {
+      let offEventInfo: null | AbsooluteTrackTimeEventInfo = null;
 
-      const barLength = division * 4 * measure;
-      const span = barLength / barNotes.length;
-
-      return barNotes.flatMap((note, noteIndex) => {
-        if (note === ".") {
+      const infos = musicInfo.score.flatMap((bar, barIndex) => {
+        const barChannel = bar.notes[channelIndex];
+        if (!barChannel) {
           return [];
         }
 
-        if (note === "-") {
-          // TODO
-          return [];
-        }
+        const barNotes = barChannel.split(/\s+/).filter((note) => note);
+        assertIsNoteCommandArray(barNotes);
 
-        return [
-          {
-            time: barLength * barIndex + span * noteIndex,
-            channelNumber,
-            noteNumber: noteNumbers[note],
-            midiChannelMessage: "note-on",
-            velocity: 127,
-          },
-          {
+        const barLength = division * 4 * measure;
+        const span = barLength / barNotes.length;
+
+        return barNotes.flatMap((note, noteIndex) => {
+          if (note === "-") {
+            offEventInfo!.time += span;
+            return [];
+          }
+
+          if (note === ".") {
+            if (offEventInfo) {
+              const info = { ...offEventInfo };
+              offEventInfo = null;
+              return info;
+            } else {
+              return [];
+            }
+          }
+
+          const eventInfos: AbsooluteTrackTimeEventInfo[] = [];
+
+          if (offEventInfo) {
+            eventInfos.push(offEventInfo);
+          }
+
+          offEventInfo = {
             time: barLength * barIndex + span * (noteIndex + 1),
             channelNumber,
             noteNumber: noteNumbers[note],
             midiChannelMessage: "note-off",
             velocity: 0,
-          },
-        ];
+          };
+
+          eventInfos.push({
+            time: barLength * barIndex + span * noteIndex,
+            channelNumber,
+            noteNumber: noteNumbers[note],
+            midiChannelMessage: "note-on",
+            velocity: 127,
+          });
+
+          return eventInfos;
+        });
       });
-    });
-  });
+
+      if (offEventInfo) {
+        infos.push(offEventInfo);
+      }
+
+      return infos;
+    },
+  );
 
   absoluteTimeTrackEventInfos.sort((a, b) => a.time - b.time);
 
