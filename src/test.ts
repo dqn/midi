@@ -6,12 +6,21 @@ import { parseMusicInfo } from "./parser";
 
 async function main() {
   const midiInfo = parseMusicInfo({
-    bpm: 240,
+    bpm: 120,
+    channels: [0],
     score: [
-      [{ channelNumber: 0, notes: ["C4", "D4", "E4", ""] }],
-      [{ channelNumber: 0, notes: ["C4", "D4", "E4", ""] }],
-      [{ channelNumber: 0, notes: ["G4", "E4", "D4", "C4"] }],
-      [{ channelNumber: 0, notes: ["D4", "E4", "D4", ""] }],
+      {
+        notes: ["C#4 G#4 B4 F#4 G#4 . C#4 E4"],
+      },
+      {
+        notes: [
+          "D#4 E4 D#4 B3 B3 B3 C#4 C#4 C#4 G#3 G#3 G#3 . . . . . . . . . . .",
+        ],
+      },
+      // { notes: ["C4 D4 E4 . "] },
+      // { notes: ["C4 D4 E4 . "] },
+      // { notes: ["G4 E4 D4 C4"] },
+      // { notes: ["D4 E4 D4 . "] },
     ],
   });
 

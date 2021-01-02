@@ -1,6 +1,6 @@
-import { MIDIInfo, TrackEventInfo } from "./midi";
+import { MIDIEventInfo, MIDIInfo, TrackEventInfo } from "./midi";
 
-const notes = {
+const noteNumbers = {
   "C-1": 0,
   "C#-1": 1,
   "D-1": 2,
@@ -131,22 +131,37 @@ const notes = {
   G9: 127,
 } as const;
 
+const noteCommands = [
+  ...(Object.keys(noteNumbers) as (keyof typeof noteNumbers)[]),
+  ".",
+  "-",
+] as const;
+
+type NoteCommand = typeof noteCommands[number];
+
 export type Bar = {
-  channelNumber: number;
-  notes: ("" | keyof typeof notes)[];
+  notes: string[];
 };
 
 export type MusicInfo = {
   bpm: number;
-  score: Bar[][];
+  channels: number[];
+  score: Bar[];
 };
 
 function gcd(x: number, y: number): number {
   return !y ? x : gcd(y, x % y);
 }
 
-function lcm(...arr: number[]): number {
+function lcm(...arr: readonly number[]): number {
   return [...arr].reduce((a, b) => (a * b) / gcd(a, b));
+}
+
+function assertIsNoteCommandArray(x: any[]): asserts x is NoteCommand[] {
+  const v = x.find((c) => !noteCommands.includes(c));
+  if (v) {
+    throw new Error(`unknown note command "${v}"`);
+  }
 }
 
 export function parseMusicInfo(musicInfo: MusicInfo): MIDIInfo {
@@ -159,73 +174,58 @@ export function parseMusicInfo(musicInfo: MusicInfo): MIDIInfo {
   ];
 
   const division = 960;
-  let deltaTimeOffset = 0;
+  const measure = 4 / 4;
 
-  const mainTrackEventInfos = musicInfo.score.flatMap((bar) => {
-    const barNotes: {
-      deltaTimeOfBar: number;
-      channelNumber: number;
-      noteNumber: number;
-      midiChannelMessage: "note-off" | "note-on";
-      velocity: number;
-    }[] = bar.flatMap((track) => {
-      const span = (division * 4) / track.notes.length;
+  const absoluteTimeTrackEventInfos: (MIDIEventInfo & {
+    time: number;
+  })[] = musicInfo.channels.flatMap((channelNumber, channelIndex) => {
+    return musicInfo.score.flatMap((bar, barIndex) => {
+      const barNotes = bar.notes[channelIndex].split(/\s+/);
+      assertIsNoteCommandArray(barNotes);
 
-      return track.notes.flatMap((note, i) => {
-        if (note === "") {
+      const barLength = division * 4 * measure;
+      const span = barLength / barNotes.length;
+
+      return barNotes.flatMap((note, noteIndex) => {
+        if (note === ".") {
+          return [];
+        }
+
+        if (note === "-") {
+          // TODO
           return [];
         }
 
         return [
           {
-            deltaTimeOfBar: span * i,
-            channelNumber: track.channelNumber,
-            noteNumber: notes[note],
+            time: barLength * barIndex + span * noteIndex,
+            channelNumber,
+            noteNumber: noteNumbers[note],
             midiChannelMessage: "note-on",
             velocity: 127,
           },
           {
-            deltaTimeOfBar: span * (i + 1),
-            channelNumber: track.channelNumber,
-            noteNumber: notes[note],
+            time: barLength * barIndex + span * (noteIndex + 1),
+            channelNumber,
+            noteNumber: noteNumbers[note],
             midiChannelMessage: "note-off",
             velocity: 0,
           },
         ];
       });
     });
-
-    barNotes.sort((a, b) => a.deltaTimeOfBar - b.deltaTimeOfBar);
-
-    let prevDeltaTimeOfBar = 0;
-
-    const infos = barNotes.map(
-      ({
-        deltaTimeOfBar,
-        channelNumber,
-        noteNumber,
-        midiChannelMessage,
-        velocity,
-      }) => {
-        let deltaTime = Math.max(deltaTimeOfBar - prevDeltaTimeOfBar, 0);
-        prevDeltaTimeOfBar = deltaTimeOfBar;
-
-        return {
-          deltaTime,
-          channelNumber,
-          noteNumber,
-          midiChannelMessage,
-          velocity,
-        };
-      },
-    );
-
-    infos[0].deltaTime += deltaTimeOffset;
-    deltaTimeOffset =
-      division * 4 - barNotes[barNotes.length - 1].deltaTimeOfBar;
-
-    return infos;
   });
+
+  absoluteTimeTrackEventInfos.sort((a, b) => a.time - b.time);
+
+  let prevTime = 0;
+  const mainTrackEventInfos = absoluteTimeTrackEventInfos.map(
+    ({ time, ...props }) => {
+      const deltaTime = time - prevTime;
+      prevTime = time;
+      return { deltaTime, ...props };
+    },
+  );
 
   return {
     division,
