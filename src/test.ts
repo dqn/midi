@@ -2,8 +2,25 @@ import fs from "fs/promises";
 
 import { printUint8Array } from "./helpers/array";
 import { makeMIDI } from "./midi";
+import { parseMusicInfo } from "./parser";
 
 async function main() {
+  const midiInfo = parseMusicInfo({
+    bpm: 240,
+    score: [
+      [{ channelNumber: 0, notes: ["C4", "D4", "E4", ""] }],
+      [{ channelNumber: 0, notes: ["C4", "D4", "E4", ""] }],
+      [{ channelNumber: 0, notes: ["G4", "E4", "D4", "C4"] }],
+      [{ channelNumber: 0, notes: ["D4", "E4", "D4", ""] }],
+    ],
+  });
+
+  console.log(JSON.stringify(midiInfo));
+  const buf1 = makeMIDI(midiInfo);
+  printUint8Array(buf1);
+  fs.writeFile("./sample.mid", buf1);
+  return;
+
   const buf = makeMIDI({
     division: 960,
     trackChunkInfos: [
