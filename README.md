@@ -1,5 +1,7 @@
 # midi
 
+[![CI](https://github.com/dqn/midi/workflows/CI/badge.svg)](https://github.com/dqn/midi/actions)
+
 [WIP] Text-based MIDI generator.
 
 ## Example
