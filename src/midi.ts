@@ -114,7 +114,7 @@ export type MIDI = {
   trackChunks: TrackChunk[];
 };
 
-export function makeMIDI(midi: MIDI): Uint8Array {
+export function generateMIDI(midi: MIDI): Uint8Array {
   const trackChunks = midi.trackChunks.flatMap((chunk) =>
     Array.from(makeTrackChunk(chunk)),
   );
