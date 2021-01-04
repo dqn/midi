@@ -1,4 +1,4 @@
-import { MIDIEventInfo, MIDIInfo, TrackEventInfo } from "./midi";
+import { MIDIEvent, MIDI, TrackEvent } from "./midi";
 
 const noteNumbers = {
   "C-1": 0,
@@ -143,7 +143,7 @@ export type Bar = {
   notes: string[];
 };
 
-export type MusicInfo = {
+export type Music = {
   bpm: number;
   channels: number[];
   score: Bar[];
@@ -164,24 +164,24 @@ function assertIsNoteCommandArray(x: any[]): asserts x is NoteCommand[] {
   }
 }
 
-export function parseMusicInfo(musicInfo: MusicInfo): MIDIInfo {
-  const metaTrackEventInfos: TrackEventInfo[] = [
+export function parseMusic(music: Music): MIDI {
+  const metaTrackEvents: TrackEvent[] = [
     {
       deltaTime: 0,
       metaType: "tempo-setting",
-      tempo: (1_000_000 * 60) / musicInfo.bpm,
+      tempo: (1_000_000 * 60) / music.bpm,
     },
   ];
 
   const division = 960;
   const measure = 4 / 4;
 
-  type AbsooluteTrackTimeEventInfo = MIDIEventInfo & { time: number };
-  const absoluteTimeTrackEventInfos: AbsooluteTrackTimeEventInfo[] = musicInfo.channels.flatMap(
+  type AbsooluteTrackTimeEvent = MIDIEvent & { time: number };
+  const absoluteTimeTrackEvents: AbsooluteTrackTimeEvent[] = music.channels.flatMap(
     (channelNumber, channelIndex) => {
-      let offEventInfo: null | AbsooluteTrackTimeEventInfo = null;
+      let offEvent: null | AbsooluteTrackTimeEvent = null;
 
-      const infos = musicInfo.score.flatMap((bar, barIndex) => {
+      const events = music.score.flatMap((bar, barIndex) => {
         const barChannel = bar.notes[channelIndex];
         if (!barChannel) {
           return [];
@@ -195,27 +195,27 @@ export function parseMusicInfo(musicInfo: MusicInfo): MIDIInfo {
 
         return barNotes.flatMap((note, noteIndex) => {
           if (note === "-") {
-            offEventInfo!.time += span;
+            offEvent!.time += span;
             return [];
           }
 
           if (note === ".") {
-            if (offEventInfo) {
-              const info = { ...offEventInfo };
-              offEventInfo = null;
-              return info;
+            if (offEvent) {
+              const event = { ...offEvent };
+              offEvent = null;
+              return event;
             } else {
               return [];
             }
           }
 
-          const eventInfos: AbsooluteTrackTimeEventInfo[] = [];
+          const events: AbsooluteTrackTimeEvent[] = [];
 
-          if (offEventInfo) {
-            eventInfos.push(offEventInfo);
+          if (offEvent) {
+            events.push(offEvent);
           }
 
-          offEventInfo = {
+          offEvent = {
             time: barLength * barIndex + span * (noteIndex + 1),
             channelNumber,
             noteNumber: noteNumbers[note],
@@ -223,7 +223,7 @@ export function parseMusicInfo(musicInfo: MusicInfo): MIDIInfo {
             velocity: 0,
           };
 
-          eventInfos.push({
+          events.push({
             time: barLength * barIndex + span * noteIndex,
             channelNumber,
             noteNumber: noteNumbers[note],
@@ -231,34 +231,32 @@ export function parseMusicInfo(musicInfo: MusicInfo): MIDIInfo {
             velocity: 127,
           });
 
-          return eventInfos;
+          return events;
         });
       });
 
-      if (offEventInfo) {
-        infos.push(offEventInfo);
+      if (offEvent) {
+        events.push(offEvent);
       }
 
-      return infos;
+      return events;
     },
   );
 
-  absoluteTimeTrackEventInfos.sort((a, b) => a.time - b.time);
+  absoluteTimeTrackEvents.sort((a, b) => a.time - b.time);
 
   let prevTime = 0;
-  const mainTrackEventInfos = absoluteTimeTrackEventInfos.map(
-    ({ time, ...props }) => {
-      const deltaTime = time - prevTime;
-      prevTime = time;
-      return { deltaTime, ...props };
-    },
-  );
+  const mainTrackEvents = absoluteTimeTrackEvents.map(({ time, ...props }) => {
+    const deltaTime = time - prevTime;
+    prevTime = time;
+    return { deltaTime, ...props };
+  });
 
   return {
     division,
-    trackChunkInfos: [
-      { trackEventInfos: metaTrackEventInfos },
-      { trackEventInfos: mainTrackEventInfos },
+    trackChunks: [
+      { trackEvents: metaTrackEvents },
+      { trackEvents: mainTrackEvents },
     ],
   };
 }

@@ -27,14 +27,14 @@ const metaTypeIds = {
   // "sequencer-specific-event": 0x7f,
 } as const;
 
-export type MIDIEventInfo = {
+export type MIDIEvent = {
   midiChannelMessage: keyof typeof midiChannelMessageIds;
   channelNumber: number;
   noteNumber: number;
   velocity: number;
 };
 
-export type MetaEventInfo =
+export type MetaEvent =
   | {
       metaType: keyof typeof metaTypeIds;
       data: string;
@@ -44,23 +44,20 @@ export type MetaEventInfo =
       tempo: number;
     };
 
-export type TrackEventInfo = { deltaTime: number } & (
-  | MIDIEventInfo
-  | MetaEventInfo
-);
+export type TrackEvent = { deltaTime: number } & (MIDIEvent | MetaEvent);
 
-function makeTrackEvent(trackEventInfo: TrackEventInfo): Uint8Array {
+function makeTrackEvent(trackEvent: TrackEvent): Uint8Array {
   let contents: Uint8Array = new Uint8Array();
-  if ("midiChannelMessage" in trackEventInfo) {
+  if ("midiChannelMessage" in trackEvent) {
     contents = new Uint8Array([
-      midiChannelMessageIds[trackEventInfo.midiChannelMessage] |
-        trackEventInfo.channelNumber,
-      trackEventInfo.noteNumber,
-      trackEventInfo.velocity,
+      midiChannelMessageIds[trackEvent.midiChannelMessage] |
+        trackEvent.channelNumber,
+      trackEvent.noteNumber,
+      trackEvent.velocity,
     ]);
-  } else if ("metaType" in trackEventInfo) {
-    if ("tempo-setting" === trackEventInfo.metaType) {
-      const tempo = numberToUint8Array(trackEventInfo.tempo);
+  } else if ("metaType" in trackEvent) {
+    if ("tempo-setting" === trackEvent.metaType) {
+      const tempo = numberToUint8Array(trackEvent.tempo);
       contents = new Uint8Array([
         0xff,
         0x51,
@@ -68,10 +65,10 @@ function makeTrackEvent(trackEventInfo: TrackEventInfo): Uint8Array {
         ...tempo,
       ]);
     } else {
-      const data = stringToCharCodeArray(trackEventInfo.data);
+      const data = stringToCharCodeArray(trackEvent.data);
       contents = new Uint8Array([
         0xff,
-        metaTypeIds[trackEventInfo.metaType],
+        metaTypeIds[trackEvent.metaType],
         ...numberToVariableLengthValue(data.length),
         ...data,
       ]);
@@ -79,17 +76,17 @@ function makeTrackEvent(trackEventInfo: TrackEventInfo): Uint8Array {
   }
 
   return new Uint8Array([
-    ...numberToVariableLengthValue(trackEventInfo.deltaTime),
+    ...numberToVariableLengthValue(trackEvent.deltaTime),
     ...contents,
   ]);
 }
 
-export type TrackChunkInfo = {
-  trackEventInfos: TrackEventInfo[];
+export type TrackChunk = {
+  trackEvents: TrackEvent[];
 };
 
-function makeTrackChunk(trackChunkInfo: TrackChunkInfo): Uint8Array {
-  const events = trackChunkInfo.trackEventInfos
+function makeTrackChunk(trackChunk: TrackChunk): Uint8Array {
+  const events = trackChunk.trackEvents
     .flatMap((event) => Array.from(makeTrackEvent(event)))
     .concat([
       0x00,
@@ -112,14 +109,14 @@ function makeTrackChunk(trackChunkInfo: TrackChunkInfo): Uint8Array {
   ]);
 }
 
-export type MIDIInfo = {
+export type MIDI = {
   division: number;
-  trackChunkInfos: TrackChunkInfo[];
+  trackChunks: TrackChunk[];
 };
 
-export function makeMIDI(midiInfo: MIDIInfo): Uint8Array {
-  const trackChunks = midiInfo.trackChunkInfos.flatMap((info) =>
-    Array.from(makeTrackChunk(info)),
+export function makeMIDI(midi: MIDI): Uint8Array {
+  const trackChunks = midi.trackChunks.flatMap((chunk) =>
+    Array.from(makeTrackChunk(chunk)),
   );
 
   return new Uint8Array([
@@ -141,10 +138,10 @@ export function makeMIDI(midiInfo: MIDIInfo): Uint8Array {
     0x01,
 
     // number of track chunks
-    ...numberToUint8Array(midiInfo.trackChunkInfos.length, 2),
+    ...numberToUint8Array(midi.trackChunks.length, 2),
 
     // division (unit of time for delta timing)
-    ...numberToUint8Array(midiInfo.division, 2),
+    ...numberToUint8Array(midi.division, 2),
 
     // track chunks
     ...trackChunks,

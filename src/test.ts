@@ -2,11 +2,11 @@ import fs from "fs/promises";
 
 import { printUint8Array } from "./helpers/array";
 import { makeMIDI } from "./midi";
-import { parseMusicInfo } from "./parser";
+import { parseMusic } from "./parser";
 
 function main() {
   // prettier-ignore
-  const midiInfo = parseMusicInfo({
+  const midi = parseMusic({
     bpm: 120,
     channels: [0, 1, 2, 3],
     score: [
@@ -101,8 +101,8 @@ function main() {
     ],
   });
 
-  console.log(JSON.stringify(midiInfo));
-  const buf = makeMIDI(midiInfo);
+  console.log(JSON.stringify(midi));
+  const buf = makeMIDI(midi);
 
   printUint8Array(buf);
   fs.writeFile("./sample.mid", buf).catch(console.error);
